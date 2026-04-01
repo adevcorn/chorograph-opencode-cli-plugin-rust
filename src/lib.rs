@@ -456,8 +456,10 @@ fn sidecar_poll() {
         match boundary {
             None => break, // No complete event yet.
             Some(end) => {
-                // Extract the complete event bytes and remove from buffer.
-                let event_bytes: Vec<u8> = unsafe { SSE_LINE_BUF.drain(..end + 2).collect() };
+                // `end` is the index of the second '\n' in the "\n\n" boundary.
+                // Drain everything up to and including that byte (..=end).
+                // Previously used ..end+2 which panics when end is the last byte.
+                let event_bytes: Vec<u8> = unsafe { SSE_LINE_BUF.drain(..=end).collect() };
                 process_sse_event(&event_bytes);
             }
         }
