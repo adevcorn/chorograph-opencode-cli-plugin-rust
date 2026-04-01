@@ -132,15 +132,7 @@ pub fn init() {
     // -----------------------------------------------------------------------
     let serve_child = match ChildProcess::spawn(
         "opencode",
-        vec![
-            "serve",
-            "--port",
-            "0",
-            "--print-logs",
-            "true",
-            "--log-level",
-            "INFO",
-        ],
+        vec!["serve", "--port", "0"],
         None,
         HashMap::new(),
     ) {
@@ -431,6 +423,18 @@ fn sidecar_poll() {
         }
         _ => {
             // 0 = no data yet, stream still open. Nothing to do.
+        }
+    }
+
+    // Safety cap: if SSE_LINE_BUF grows beyond 64 KB without a complete event
+    // boundary, it means we are accumulating non-SSE data (e.g. raw log output).
+    // Discard to prevent unbounded WASM heap growth which would exhaust linear
+    // memory and cause a trap in handle_action.
+    const SSE_BUF_MAX: usize = 64 * 1024;
+    unsafe {
+        if SSE_LINE_BUF.len() > SSE_BUF_MAX {
+            log!("[opencode-plugin] SSE buffer exceeded {}KB without event boundary — discarding to prevent heap exhaustion", SSE_BUF_MAX / 1024);
+            SSE_LINE_BUF.clear();
         }
     }
 
