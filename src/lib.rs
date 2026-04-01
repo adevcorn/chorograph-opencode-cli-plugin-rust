@@ -103,9 +103,47 @@ static mut TERMINAL_ROWS: i32 = 50;
 
 #[chorograph_plugin]
 pub fn init() {
-    // Push initial UI: a terminal component in "not yet spawned" state (-1 handle)
-    // plus a "Launch opencode" button.
-    push_terminal_ui(-1);
+    // Auto-spawn opencode immediately with conservative default dimensions.
+    // The Swift host's GeometryReader will send pty_resize with the real panel
+    // size as soon as the view lays out, so these are just initial values.
+    let cols = 80i32;
+    let rows = 24i32;
+
+    let mut env: HashMap<&str, &str> = HashMap::new();
+    env.insert("TERM", "xterm-256color");
+    env.insert("COLORTERM", "truecolor");
+
+    let handle = spawn_pty("opencode", &[], None, env, cols, rows);
+
+    if handle < 0 {
+        log!("[opencode-plugin] Failed to spawn opencode PTY");
+        push_ai_event(
+            "opencode",
+            &AIEvent::Error {
+                message: "Failed to spawn opencode. Make sure opencode is installed and on PATH."
+                    .to_string(),
+            },
+        );
+        // Show an error label so the user knows what happened.
+        let err_ui = serde_json::json!([{
+            "type": "label",
+            "text": "Error: could not spawn opencode. Check that it is on PATH."
+        }]);
+        push_ui(&err_ui.to_string());
+        return;
+    }
+
+    unsafe {
+        PTY_HANDLE = handle;
+        TERMINAL_COLS = cols;
+        TERMINAL_ROWS = rows;
+    }
+
+    log!(
+        "[opencode-plugin] Auto-spawned opencode, PTY handle={}",
+        handle
+    );
+    push_terminal_ui(handle);
 }
 
 #[chorograph_plugin]
@@ -236,33 +274,14 @@ fn push_terminal_ui(handle: i32) {
     let cols = unsafe { TERMINAL_COLS };
     let rows = unsafe { TERMINAL_ROWS };
 
-    let components = if handle < 0 {
-        json!([
-            {
-                "type": "label",
-                "text": "OpenCode Terminal (experimental)"
-            },
-            {
-                "type": "button",
-                "text": "Launch opencode",
-                "action": "spawn_opencode"
-            }
-        ])
-    } else {
-        json!([
-            {
-                "type": "terminal",
-                "handle": handle,
-                "cols": cols,
-                "rows": rows
-            },
-            {
-                "type": "button",
-                "text": "Close terminal",
-                "action": "pty_close"
-            }
-        ])
-    };
+    let components = json!([
+        {
+            "type": "terminal",
+            "handle": handle,
+            "cols": cols,
+            "rows": rows
+        }
+    ]);
 
     push_ui(&components.to_string());
 }
