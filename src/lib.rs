@@ -102,7 +102,7 @@ static mut TERMINAL_ROWS: i32 = 50;
 // ---------------------------------------------------------------------------
 
 #[chorograph_plugin]
-pub fn run() {
+pub fn init() {
     // Push initial UI: a terminal component in "not yet spawned" state (-1 handle)
     // plus a "Launch opencode" button.
     push_terminal_ui(-1);
