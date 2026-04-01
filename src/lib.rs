@@ -1,7 +1,7 @@
 // chorograph-opencode-cli-plugin-rust
 // Experimental plugin that:
-//   1. Spawns `opencode serve --port 0 --print-logs true --log-level INFO` as a background
-//      child process and parses the port from its stdout.
+//   1. Spawns `opencode serve --port 0` as a background child process and
+//      parses the port from its stdout.
 //   2. Spawns `opencode attach http://127.0.0.1:<PORT>` in a PTY so the user has a fully
 //      interactive terminal inside Chorograph's FloatingPanel (⌘P).
 //   3. Connects a non-blocking SSE observer to `GET /global/event` on the same server to
@@ -211,6 +211,12 @@ pub fn handle_action(action_id: String, payload: Value) {
         // PTY I/O actions (called by the Swift PluginTerminalView)
         // ------------------------------------------------------------------
         "pty_poll" => {
+            // Fast-path: if the PTY hasn't been opened yet, skip entirely.
+            // This avoids unnecessary allocations during the startup window and
+            // prevents wasting WASM heap while opencode serve is still starting.
+            if unsafe { PTY_HANDLE } < 0 {
+                return;
+            }
             let handle = payload.get("handle").and_then(|v| v.as_i64()).unwrap_or(-1) as i32;
             if handle < 0 {
                 return;
@@ -303,9 +309,13 @@ pub fn handle_action(action_id: String, payload: Value) {
         }
 
         // ------------------------------------------------------------------
-        // SSE sidecar poll — called by Swift at ~2 fps
+        // SSE sidecar poll — called by Swift at ~10 fps
         // ------------------------------------------------------------------
         "sidecar_poll" => {
+            // Fast-path: skip if SSE stream isn't open yet.
+            if unsafe { SSE_HANDLE } <= 0 {
+                return;
+            }
             sidecar_poll();
         }
 
