@@ -505,11 +505,20 @@ fn process_sse_event(raw: &[u8]) {
 }
 
 /// Map a parsed SSE event JSON value to one or more Chorograph AIEvents.
+///
+/// SSE events are wrapped: { "directory": "...", "payload": { "type": "...", "properties": {...} } }
+/// We must unwrap the payload first before reading type/properties.
 fn map_sse_event_to_ai_events(v: &Value) {
-    let event_type = match v.get("type").and_then(|t| t.as_str()) {
+    // Unwrap the payload wrapper.
+    let payload = match v.get("payload") {
+        Some(p) => p,
+        None => return,
+    };
+    let event_type = match payload.get("type").and_then(|t| t.as_str()) {
         Some(t) => t,
         None => return,
     };
+    let props = payload.get("properties").unwrap_or(&Value::Null);
 
     const SESSION: &str = "opencode";
 
@@ -518,7 +527,7 @@ fn map_sse_event_to_ai_events(v: &Value) {
         // Tool call events
         // ------------------------------------------------------------------
         "message.part.updated" => {
-            let part = match v.get("part") {
+            let part = match props.get("part") {
                 Some(p) => p,
                 None => return,
             };
@@ -543,9 +552,10 @@ fn map_sse_event_to_ai_events(v: &Value) {
                     "completed" => {
                         match tool_name {
                             "write" | "edit" => {
-                                // Try both "path" and "file_path" field names.
+                                // Try all known field name variants.
                                 let path = input
-                                    .get("path")
+                                    .get("filePath") // camelCase — confirmed from live SSE stream
+                                    .or_else(|| input.get("path"))
                                     .or_else(|| input.get("file_path"))
                                     .and_then(|p| p.as_str())
                                     .unwrap_or("unknown");
@@ -578,7 +588,8 @@ fn map_sse_event_to_ai_events(v: &Value) {
                             }
                             "read" => {
                                 let path = input
-                                    .get("file_path")
+                                    .get("filePath") // camelCase — confirmed from live SSE stream
+                                    .or_else(|| input.get("file_path"))
                                     .or_else(|| input.get("path"))
                                     .and_then(|p| p.as_str())
                                     .unwrap_or("unknown");
@@ -631,30 +642,43 @@ fn map_sse_event_to_ai_events(v: &Value) {
         // ------------------------------------------------------------------
         // Session lifecycle events
         // ------------------------------------------------------------------
-        "session.idle" => {
-            push_ai_event(
-                SESSION,
-                &AIEvent::TurnCompleted {
-                    session_id: SESSION.to_string(),
-                },
-            );
-        }
-
-        "session.error" => {
-            let msg = v
-                .get("error")
-                .and_then(|e| e.as_str())
-                .unwrap_or("opencode session error");
-            push_ai_event(
-                SESSION,
-                &AIEvent::Error {
-                    message: msg.to_string(),
-                },
-            );
+        // "session.idle" does NOT exist — the real event is "session.status"
+        // with properties.status.type == "idle" | "error" | "busy" etc.
+        "session.status" => {
+            let status_type = props
+                .get("status")
+                .and_then(|s| s.get("type"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("");
+            match status_type {
+                "idle" => {
+                    push_ai_event(
+                        SESSION,
+                        &AIEvent::TurnCompleted {
+                            session_id: SESSION.to_string(),
+                        },
+                    );
+                }
+                "error" => {
+                    let msg = props
+                        .get("status")
+                        .and_then(|s| s.get("message"))
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("opencode session error");
+                    push_ai_event(
+                        SESSION,
+                        &AIEvent::Error {
+                            message: msg.to_string(),
+                        },
+                    );
+                }
+                _ => {}
+            }
         }
 
         _ => {
-            // All other event types (message.part.delta, session.created, etc.) are dropped.
+            // All other event types (message.part.delta, session.created,
+            // session.diff, session.updated, server.connected, etc.) are dropped.
         }
     }
 }
