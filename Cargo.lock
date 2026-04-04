@@ -10,7 +10,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "chorograph-opencode-cli-plugin-rust"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "base64",
  "chorograph-plugin-sdk-rust",
@@ -21,7 +21,7 @@ dependencies = [
 [[package]]
 name = "chorograph-plugin-macros"
 version = "0.1.0"
-source = "git+https://github.com/adevcorn/chorograph-plugin-sdk-rust.git?tag=v0.2.2#ddd2283af689c4b4c3aaeeebfc410dbcec5705fa"
+source = "git+https://github.com/adevcorn/chorograph-plugin-sdk-rust.git?tag=v0.2.3#646ddf4f7f21dd2258b0dac81df44ba492ed4ce3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -30,8 +30,8 @@ dependencies = [
 
 [[package]]
 name = "chorograph-plugin-sdk-rust"
-version = "0.2.0"
-source = "git+https://github.com/adevcorn/chorograph-plugin-sdk-rust.git?tag=v0.2.2#ddd2283af689c4b4c3aaeeebfc410dbcec5705fa"
+version = "0.2.3"
+source = "git+https://github.com/adevcorn/chorograph-plugin-sdk-rust.git?tag=v0.2.3#646ddf4f7f21dd2258b0dac81df44ba492ed4ce3"
 dependencies = [
  "chorograph-plugin-macros",
  "serde",
